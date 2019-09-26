@@ -6,7 +6,7 @@ from operator import attrgetter
 
 from django.core.exceptions import EmptyResultSet, FieldError
 from django.db import DEFAULT_DB_ALIAS, connection
-from django.db.models import Count, Exists, F, OuterRef, Q
+from django.db.models import Count, Exists, F, OuterRef, Q, Subquery
 from django.db.models.sql.constants import LOUTER
 from django.db.models.sql.where import NothingNode, WhereNode
 from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
@@ -3569,6 +3569,26 @@ class DoubleInSubqueryTests(TestCase):
         joins = Join.objects.filter(a__in=leaf_as).values_list('b__id', flat=True)
         qs = LeafB.objects.filter(pk__in=joins)
         self.assertSequenceEqual(qs, [lfb1])
+
+
+class OracleSubqueryOuterRefGroupByTests(TestCase):
+    def test_no_subquery_in_group_by(self):
+        o1 = Order.objects.create(id=-2)
+        OrderItem.objects.create(order=o1, status=0)
+        order_item_sq = (
+            OrderItem.objects
+            .filter(order=OuterRef('id'))
+            .annotate(count=Count('id'))
+            .order_by('pk')
+            .values('count')
+        )
+        order_query = (Order.objects
+                       .annotate(order_item_count=Subquery(order_item_sq))
+                       .annotate(item_count=Count('items'))
+                       .order_by('pk')
+                       .values('id', 'order_item_count', 'item_count', 'name'))
+        order_query = list(order_query)
+        self.assertEqual(order_query[0]['order_count'], 1)
 
 
 class Ticket18785Tests(SimpleTestCase):
