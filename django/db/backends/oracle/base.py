@@ -333,7 +333,7 @@ class OracleParam:
                                 not isinstance(param, Oracle_datetime)):
             param = Oracle_datetime.from_datetime(param)
 
-        string_size = 0
+        self.string_size = 0
         # Oracle doesn't recognize True and False correctly.
         if param is True:
             param = 1
@@ -349,11 +349,11 @@ class OracleParam:
             self.force_bytes = force_str(param, cursor.charset, strings_only)
             if isinstance(self.force_bytes, str):
                 # We could optimize by only converting up to 4000 bytes here
-                string_size = len(force_bytes(param, cursor.charset, strings_only))
+                self.string_size = len(force_bytes(param, cursor.charset, strings_only))
         if hasattr(param, 'input_size'):
             # If parameter has `input_size` attribute, use that.
             self.input_size = param.input_size
-        elif string_size > 4000:
+        elif self.string_size and self.string_size > 4000:
             # Mark any string param greater than 4000 characters as a CLOB.
             self.input_size = Database.CLOB
         elif isinstance(param, datetime.datetime):
@@ -505,7 +505,14 @@ class FormatStylePlaceholderCursor:
             # Handle params as sequence
             args = [(':arg%d' % i) for i in range(len(params))]
             query = query % tuple(args)
-        return query, self._format_params(params)
+        formatted_params = self._format_params(params)
+
+        if isinstance(formatted_params, dict):
+            if any(v.input_size == Database.CLOB for v in formatted_params.values()):
+                for v in formatted_params.values():
+                    if v.input_size is None and v.string_size is not None:
+                        v.input_size = Database.CLOB
+        return query, formatted_params
 
     def execute(self, query, params=None):
         query, params = self._fix_for_params(query, params, unify_by_values=True)

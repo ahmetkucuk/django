@@ -3591,6 +3591,15 @@ class OracleSubqueryOuterRefGroupByTests(TestCase):
         self.assertEqual(order_query[0]['order_count'], 1)
 
 
+class OracleTextFieldOuterRefGroupByTests(TestCase):
+    @unittest.skipIf(connection.vendor != 'oracle', 'Only an oracle issue')
+    def test_text_field_bulk_create(self):
+        m1 = ModelD(name=''.join(['a']*4001))
+        m2 = ModelD(name='a')
+        m3 = ModelD(name='')
+        ModelD.objects.bulk_create([m1, m2, m3])
+
+
 class Ticket18785Tests(SimpleTestCase):
     def test_ticket_18785(self):
         # Test join trimming from ticket18785
